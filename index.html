@@ -1133,6 +1133,14 @@
 
             input.focus();
 
+            // 回车键粘贴
+            input.onkeydown = function(e) {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    confirmBtn.click();
+                }
+            };
+
             cancelBtn.onclick = function() {
                 dialog.remove();
             };
