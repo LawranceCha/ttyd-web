@@ -1,0 +1,1053 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>终端会话管理</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            min-height: 100vh;
+            color: #eaeaea;
+        }
+
+        /* 会话选择器 */
+        .session-selector {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .selector-card {
+            width: 100%;
+            max-width: 500px;
+            background: #16213e;
+            border-radius: 16px;
+            overflow: visible;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.4);
+            max-height: 80vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .selector-header {
+            padding: 24px;
+            text-align: center;
+            background: linear-gradient(180deg, #1f2b47 0%, #16213e 100%);
+            border-bottom: 1px solid #0f3460;
+        }
+
+        .selector-header h1 {
+            font-size: 24px;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+        }
+
+        .selector-header p {
+            color: #888;
+            font-size: 14px;
+        }
+
+        .session-list {
+            padding: 16px;
+            flex: 1;
+            overflow-y: auto;
+            min-height: 0;
+        }
+
+        .session-item {
+            display: flex;
+            align-items: center;
+            padding: 14px 16px;
+            background: #1a1a2e;
+            border-radius: 10px;
+            margin-bottom: 10px;
+            cursor: pointer;
+            transition: all 0.2s;
+            border: 1px solid transparent;
+        }
+
+        .session-item:hover {
+            background: #0f3460;
+            border-color: #e94560;
+            transform: translateX(4px);
+        }
+
+        .session-icon {
+            width: 44px;
+            height: 44px;
+            background: linear-gradient(135deg, #e94560, #c73e54);
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-right: 14px;
+            font-size: 20px;
+        }
+
+        .session-info {
+            flex: 1;
+        }
+
+        .session-name {
+            font-weight: 600;
+            font-size: 15px;
+            margin-bottom: 4px;
+        }
+
+        .session-meta {
+            font-size: 12px;
+            color: #888;
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+
+        .session-cwd {
+            font-family: 'Fira Code', 'Consolas', monospace;
+            font-size: 11px;
+            color: #5c9fff;
+            background: rgba(92, 159, 255, 0.1);
+            padding: 2px 6px;
+            border-radius: 4px;
+            max-width: 200px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            display: inline-block;
+        }
+
+        .session-actions {
+            display: flex;
+            gap: 8px;
+        }
+
+        .btn-icon {
+            width: 32px;
+            height: 32px;
+            border: none;
+            background: transparent;
+            color: #888;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .btn-icon:hover {
+            background: #0f3460;
+            color: #fff;
+        }
+
+        .btn-icon.delete:hover {
+            background: #e94560;
+            color: white;
+        }
+
+        .create-section {
+            padding: 16px;
+            border-top: 1px solid #0f3460;
+            display: flex;
+            gap: 10px;
+        }
+
+        .create-section input {
+            flex: 1;
+            padding: 12px 16px;
+            background: #1a1a2e;
+            border: 1px solid #0f3460;
+            border-radius: 8px;
+            color: #fff;
+            font-size: 14px;
+        }
+
+        .create-section input:focus {
+            outline: none;
+            border-color: #e94560;
+        }
+
+        .create-section input::placeholder {
+            color: #666;
+        }
+
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-weight: 500;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #e94560, #c73e54);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            opacity: 0.9;
+            transform: scale(1.02);
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 50px 20px;
+            color: #666;
+        }
+
+        .empty-state .icon {
+            font-size: 64px;
+            margin-bottom: 16px;
+            opacity: 0.5;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #888;
+        }
+
+        .loading::after {
+            content: '';
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 2px solid #0f3460;
+            border-top-color: #e94560;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-left: 10px;
+            vertical-align: middle;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* 终端界面 */
+        .terminal-view {
+            display: none;
+            height: 100vh;
+            flex-direction: column;
+        }
+
+        .terminal-view.show {
+            display: flex;
+        }
+
+        .session-selector.hide {
+            display: none;
+        }
+
+        /* Mac 风格标题栏 */
+        .titlebar {
+            background: linear-gradient(180deg, #3d3d5c 0%, #2d2d4a 100%);
+            padding: 10px 16px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-bottom: 1px solid #1a1a2e;
+            flex-shrink: 0;
+        }
+
+        .window-controls {
+            display: flex;
+            gap: 8px;
+        }
+
+        .window-btn {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            border: none;
+            cursor: pointer;
+        }
+
+        .btn-close { background: #ff5f57; }
+        .btn-minimize { background: #febc2e; }
+        .btn-maximize { background: #28c840; }
+
+        .window-btn:hover { opacity: 0.8; }
+
+        .title {
+            color: #888;
+            font-size: 13px;
+        }
+
+        .back-btn {
+            padding: 6px 14px;
+            background: rgba(255,255,255,0.1);
+            border: none;
+            color: #ccc;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 13px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            transition: all 0.2s;
+        }
+
+        .back-btn:hover {
+            background: rgba(255,255,255,0.2);
+            color: #fff;
+        }
+
+        /* 终端区域 */
+        .terminal-wrapper {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            background: #0d0d0d;
+            position: relative;
+            min-height: 0;
+        }
+
+        #terminal {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            padding: 8px;
+        }
+
+        #terminal .xterm {
+            height: 100%;
+            width: 100%;
+        }
+
+        #terminal .xterm-viewport {
+            height: 100% !important;
+        }
+
+        #terminal .xterm-screen {
+            height: 100% !important;
+        }
+
+        /* 移动端适配 */
+        @media (max-width: 768px) {
+            #terminal {
+                padding: 4px;
+            }
+            .titlebar {
+                padding: 8px 12px;
+            }
+            .title {
+                font-size: 12px;
+                max-width: 100px;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap;
+            }
+            .back-btn {
+                padding: 6px 10px;
+                font-size: 12px;
+            }
+            .window-controls {
+                display: none;
+            }
+            .shortcuts-toggle {
+                width: 44px;
+                height: 44px;
+                bottom: 16px;
+                right: 16px;
+            }
+            .sc-btn {
+                padding: 8px 14px;
+                font-size: 13px;
+            }
+        }
+
+        /* 快捷栏 - 悬浮底栏 */
+        .shortcuts {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: rgba(26, 26, 46, 0.95);
+            padding: 8px 12px;
+            display: flex;
+            gap: 6px;
+            flex-wrap: wrap;
+            border-top: 1px solid #2d2d4a;
+            z-index: 10;
+            transform: translateY(100%);
+            transition: transform 0.2s ease;
+        }
+
+        .shortcuts.show {
+            transform: translateY(0);
+        }
+
+        .shortcuts-toggle {
+            position: absolute;
+            bottom: 8px;
+            right: 12px;
+            width: 36px;
+            height: 36px;
+            background: rgba(233, 69, 96, 0.9);
+            border: none;
+            border-radius: 50%;
+            color: #fff;
+            font-size: 18px;
+            cursor: pointer;
+            z-index: 11;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+            transition: all 0.2s;
+        }
+
+        .shortcuts-toggle:hover {
+            transform: scale(1.1);
+        }
+
+        .shortcuts-toggle.active {
+            bottom: 60px;
+        }
+
+        .sc-btn {
+            padding: 6px 12px;
+            background: #2d2d4a;
+            border: 1px solid #3d3d5c;
+            color: #ccc;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 12px;
+            white-space: nowrap;
+            transition: all 0.2s;
+        }
+
+        .sc-btn:hover {
+            background: #3d3d5c;
+            color: #fff;
+        }
+
+        .sc-btn:active {
+            transform: scale(0.95);
+        }
+
+        /* 帮助面板 */
+        .help-panel {
+            position: fixed;
+            bottom: 70px;
+            right: 16px;
+            background: #2d2d4a;
+            border-radius: 12px;
+            padding: 16px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+            display: none;
+            max-width: 320px;
+            z-index: 100;
+        }
+
+        .help-panel.show {
+            display: block;
+        }
+
+        .help-panel h3 {
+            color: #fff;
+            margin-bottom: 12px;
+            font-size: 14px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid #3d3d5c;
+        }
+
+        .help-panel table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 12px;
+        }
+
+        .help-panel td {
+            padding: 6px 4px;
+            border-bottom: 1px solid #3d3d5c;
+        }
+
+        .help-panel td:first-child {
+            color: #febc2e;
+            font-family: monospace;
+            width: 100px;
+        }
+
+        .help-panel td:last-child {
+            color: #888;
+        }
+
+        /* Toast */
+        .toast {
+            position: fixed;
+            bottom: 90px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #3d3d5c;
+            color: #fff;
+            padding: 10px 20px;
+            border-radius: 8px;
+            opacity: 0;
+            transition: opacity 0.3s;
+            z-index: 200;
+        }
+
+        .toast.show {
+            opacity: 1;
+        }
+
+        /* 状态栏 */
+        .statusbar {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            background: rgba(22, 33, 62, 0.9);
+            padding: 3px 12px;
+            display: flex;
+            justify-content: space-between;
+            font-size: 11px;
+            color: #666;
+            z-index: 10;
+            opacity: 0;
+            transition: opacity 0.2s;
+        }
+
+        .terminal-wrapper:hover .statusbar {
+            opacity: 1;
+        }
+    </style>
+</head>
+<body>
+    <!-- 会话选择器 -->
+    <div class="session-selector" id="sessionSelector">
+        <div class="selector-card">
+            <div class="selector-header">
+                <h1>Terminal Sessions</h1>
+                <p>选择 tmux 会话或创建新会话</p>
+            </div>
+            <div class="session-list" id="sessionList">
+                <div class="loading">加载会话列表</div>
+            </div>
+            <div class="create-section">
+                <input type="text" id="newSessionName" placeholder="输入新会话名称...">
+                <button class="btn btn-primary" id="createBtn">创建</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 终端视图 -->
+    <div class="terminal-view" id="terminalView">
+        <div class="titlebar">
+            <div class="window-controls">
+                <button class="window-btn btn-close" title="关闭"></button>
+                <button class="window-btn btn-minimize" title="最小化"></button>
+                <button class="window-btn btn-maximize" onclick="toggleFullscreen()"></button>
+            </div>
+            <div class="title" id="termTitle">终端</div>
+            <button class="back-btn" id="backBtn">返回列表</button>
+        </div>
+        <div class="terminal-wrapper">
+            <div class="statusbar">
+                <span id="statusText">已连接</span>
+                <span id="sessionInfo">-</span>
+            </div>
+            <div id="terminal"></div>
+            <button class="shortcuts-toggle" id="shortcutsToggle">+</button>
+            <div class="shortcuts" id="shortcuts">
+                <button class="sc-btn" onclick="pasteToTerm()">粘贴</button>
+                <button class="sc-btn" onclick="copyFromTerm()">复制</button>
+                <span style="color:#3d3d5c">|</span>
+                <button class="sc-btn" data-cmd="cd ~">~</button>
+                <button class="sc-btn" data-cmd="ls -la">ls</button>
+                <button class="sc-btn" data-cmd="clear">clear</button>
+                <span style="color:#3d3d5c">|</span>
+                <button class="sc-btn" onclick="showHelp()">?</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 帮助面板 -->
+    <div class="help-panel" id="helpPanel">
+        <h3>复制粘贴</h3>
+        <table>
+            <tr><td>Shift+拖动</td><td>选中文字</td></tr>
+            <tr><td>Ctrl+Shift+V</td><td>粘贴</td></tr>
+            <tr><td>Shift+Insert</td><td>粘贴</td></tr>
+            <tr><td>Ctrl+Shift+C</td><td>复制</td></tr>
+        </table>
+        <h3 style="margin-top:12px">tmux 快捷键</h3>
+        <table>
+            <tr><td>Ctrl+B d</td><td>断开会话</td></tr>
+            <tr><td>Ctrl+B c</td><td>新建窗口</td></tr>
+            <tr><td>Ctrl+B n/p</td><td>下/上一个窗口</td></tr>
+            <tr><td>Ctrl+B %</td><td>垂直分屏</td></tr>
+            <tr><td>Ctrl+B "</td><td>水平分屏</td></tr>
+            <tr><td>Ctrl+B [</td><td>滚动模式(q退出)</td></tr>
+        </table>
+    </div>
+
+    <div class="toast" id="toast"></div>
+
+    <!-- 隐藏的 textarea 用于复制粘贴 -->
+    <textarea id="clipboardTextarea" style="position:absolute;left:-9999px;top:-9999px;width:1px;height:1px;opacity:0;"></textarea>
+
+    <script>
+        // 动态加载 xterm 静态资源
+        (function() {
+            var host = location.hostname || 'localhost';
+            var baseUrl = 'http://' + host + ':7682/static/js/';
+
+            // 加载 CSS
+            var link = document.createElement('link');
+            link.rel = 'stylesheet';
+            link.href = baseUrl + 'xterm.min.css';
+            document.head.appendChild(link);
+
+            // 同步加载 JS
+            document.write('<script src="' + baseUrl + 'xterm.min.js"><\/script>');
+            document.write('<script src="' + baseUrl + 'xterm-addon-fit.min.js"><\/script>');
+        })();
+    </script>
+    <script>
+    (function() {
+        var term = null;
+        var socket = null;
+        var fitAddon = null;
+        var currentSession = null;
+        var refreshInterval = null;
+        var API_PORT = 7682;
+
+        // 初始化
+        function init() {
+            loadSessions();
+            document.getElementById('createBtn').onclick = createSession;
+            document.getElementById('backBtn').onclick = backToList;
+            document.getElementById('newSessionName').onkeypress = function(e) {
+                if (e.key === 'Enter') createSession();
+            };
+            bindShortcuts();
+
+            // 定期刷新会话列表
+            refreshInterval = setInterval(loadSessions, 5000);
+        }
+
+        // 获取 API URL
+        function getApiUrl(path) {
+            var host = location.hostname || 'localhost';
+            return 'http://' + host + ':' + API_PORT + path;
+        }
+
+        // 加载会话列表
+        function loadSessions() {
+            fetch(getApiUrl('/sessions'))
+                .then(function(res) { return res.json(); })
+                .then(function(data) {
+                    var sessions = (data.sessions || []).map(function(s) {
+                        return {
+                            name: s.name,
+                            windows: s.windows,
+                            created: formatTime(s.created),
+                            cwd: s.cwd || '-'
+                        };
+                    });
+                    renderSessions(sessions);
+                })
+                .catch(function(err) {
+                    console.error('Failed to load sessions:', err);
+                    renderSessions([]);
+                });
+        }
+
+        // 格式化时间
+        function formatTime(timestamp) {
+            try {
+                var date = new Date(parseInt(timestamp) * 1000);
+                return date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+            } catch(e) {
+                return '-';
+            }
+        }
+
+        // 渲染会话列表
+        function renderSessions(sessions) {
+            var list = document.getElementById('sessionList');
+
+            if (sessions.length === 0) {
+                list.innerHTML = '<div class="empty-state">' +
+                    '<p>暂无活动会话</p>' +
+                    '<p style="font-size:12px;color:#555;margin-top:8px">输入名称创建新会话</p>' +
+                    '</div>';
+                return;
+            }
+
+            var html = '';
+            for (var i = 0; i < sessions.length; i++) {
+                var s = sessions[i];
+                html += '<div class="session-item" data-name="' + s.name + '">' +
+                    '<div class="session-icon">></div>' +
+                    '<div class="session-info">' +
+                    '<div class="session-name">' + s.name + '</div>' +
+                    '<div class="session-meta">' +
+                    '<span>' + s.windows + ' 个窗口 · 创建于 ' + s.created + '</span>' +
+                    '<span class="session-cwd" title="' + s.cwd + '">' + s.cwd + '</span>' +
+                    '</div>' +
+                    '</div>' +
+                    '<div class="session-actions">' +
+                    '<button class="btn-icon delete" data-name="' + s.name + '" title="删除会话">x</button>' +
+                    '</div>' +
+                    '</div>';
+            }
+            list.innerHTML = html;
+
+            // 绑定点击事件
+            var items = list.querySelectorAll('.session-item');
+            for (var j = 0; j < items.length; j++) {
+                items[j].onclick = function(e) {
+                    if (!e.target.classList.contains('delete')) {
+                        connectToSession(this.dataset.name);
+                    }
+                };
+            }
+
+            var deleteBtns = list.querySelectorAll('.btn-icon.delete');
+            for (var k = 0; k < deleteBtns.length; k++) {
+                deleteBtns[k].onclick = function(e) {
+                    e.stopPropagation();
+                    deleteSession(this.dataset.name);
+                };
+            }
+        }
+
+        // 创建会话
+        function createSession() {
+            var input = document.getElementById('newSessionName');
+            var name = input.value.trim();
+            if (!name) {
+                name = 'sess-' + Date.now().toString(36);
+            }
+            connectToSession(name);
+            input.value = '';
+        }
+
+        // 删除会话
+        function deleteSession(name) {
+            if (!confirm('确定要删除会话 "' + name + '" 吗？\n会话中的所有程序将被终止。')) return;
+
+            fetch(getApiUrl('/session/' + encodeURIComponent(name)), { method: 'DELETE' })
+                .then(function(res) { return res.json(); })
+                .then(function(data) {
+                    if (data.success) {
+                        toast('会话已删除');
+                        loadSessions();
+                    } else {
+                        toast('删除失败: ' + (data.error || '未知错误'));
+                    }
+                })
+                .catch(function(err) {
+                    toast('删除失败');
+                });
+        }
+
+        // 连接到会话
+        function connectToSession(name) {
+            currentSession = name;
+
+            // 停止刷新会话列表
+            if (refreshInterval) {
+                clearInterval(refreshInterval);
+                refreshInterval = null;
+            }
+
+            document.getElementById('sessionSelector').classList.add('hide');
+            document.getElementById('terminalView').classList.add('show');
+            document.getElementById('termTitle').textContent = name;
+            document.getElementById('sessionInfo').textContent = name;
+
+            initTerminal(name);
+        }
+
+        // 初始化终端
+        function initTerminal(name) {
+            if (term) {
+                term.dispose();
+                term = null;
+            }
+
+            term = new Terminal({
+                fontSize: window.innerWidth <= 768 ? 12 : 14,
+                fontFamily: "'Fira Code', 'JetBrains Mono', 'Consolas', monospace",
+                cursorBlink: true,
+                scrollback: 10000,
+                allowProposedApi: true,
+                theme: {
+                    background: '#0d0d0d',
+                    foreground: '#eaeaea',
+                    cursor: '#e94560',
+                    selection: 'rgba(233, 69, 96, 0.3)',
+                    black: '#1a1a2e',
+                    red: '#e94560',
+                    green: '#28c840',
+                    yellow: '#febc2e',
+                    blue: '#5c9fff',
+                    magenta: '#c678dd',
+                    cyan: '#56b6c2',
+                    white: '#eaeaea',
+                    brightBlack: '#5c5c7a',
+                    brightRed: '#ff7b8a',
+                    brightGreen: '#5af78e',
+                    brightYellow: '#ffeb3b',
+                    brightBlue: '#82aaff',
+                    brightMagenta: '#e06c75',
+                    brightCyan: '#7ee0e0',
+                    brightWhite: '#ffffff'
+                }
+            });
+
+            fitAddon = new FitAddon.FitAddon();
+            term.loadAddon(fitAddon);
+            term.open(document.getElementById('terminal'));
+
+            // 确保 xterm 填满容器
+            function doFit() {
+                try { fitAddon.fit(); } catch(e) {}
+            }
+            setTimeout(doFit, 50);
+            setTimeout(doFit, 200);
+            setTimeout(doFit, 500);
+            setTimeout(doFit, 1000);
+
+            // 移动端屏幕旋转时重新适配
+            if (window.innerWidth <= 768) {
+                window.addEventListener('orientationchange', function() {
+                    setTimeout(doFit, 100);
+                    setTimeout(doFit, 300);
+                });
+            }
+
+            // 右键粘贴
+            term.element.addEventListener('contextmenu', function(e) {
+                e.preventDefault();
+                pasteToTerm();
+            });
+
+            term.onData(function(data) {
+                if (socket && socket.readyState === WebSocket.OPEN) {
+                    socket.send('0' + data);
+                }
+            });
+
+            // 键盘快捷键
+            document.addEventListener('keydown', function(e) {
+                if ((e.ctrlKey && e.shiftKey && e.key === 'V') || (e.shiftKey && e.key === 'Insert')) {
+                    e.preventDefault();
+                    pasteToTerm();
+                }
+                if (e.ctrlKey && e.shiftKey && e.key === 'C') {
+                    e.preventDefault();
+                    copyFromTerm();
+                }
+            });
+
+            window.addEventListener('resize', function() {
+                if (fitAddon && term) {
+                    try { fitAddon.fit(); } catch(e) {}
+                }
+            });
+
+            connectWebSocket(name);
+        }
+
+        // 连接 WebSocket
+        function connectWebSocket(name) {
+            var protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+            socket = new WebSocket(protocol + '//' + location.host + '/ws', ['tty']);
+            socket.binaryType = 'arraybuffer';
+
+            socket.onopen = function() {
+                document.getElementById('statusText').textContent = '已连接';
+                socket.send(JSON.stringify({ columns: term.cols, rows: term.rows }));
+
+                setTimeout(function() {
+                    socket.send('0tmux attach -t ' + name + ' 2>/dev/null || tmux new -s ' + name + '\r');
+                }, 100);
+            };
+
+            socket.onmessage = function(e) {
+                if (e.data instanceof ArrayBuffer) {
+                    var arr = new Uint8Array(e.data);
+                    var cmd = String.fromCharCode(arr[0]);
+                    var payload = arr.slice(1);
+
+                    switch (cmd) {
+                        case '0':
+                            term.write(payload);
+                            break;
+                        case '1':
+                            var title = new TextDecoder().decode(payload);
+                            document.getElementById('termTitle').textContent = title;
+                            break;
+                    }
+                }
+            };
+
+            socket.onclose = function() {
+                document.getElementById('statusText').textContent = '连接已断开';
+            };
+
+            socket.onerror = function() {
+                toast('连接错误');
+            };
+        }
+
+        // 返回会话列表
+        function backToList() {
+            if (socket && socket.readyState === WebSocket.OPEN) {
+                socket.send('0\x02d');
+                setTimeout(function() {
+                    socket.close();
+                    socket = null;
+                }, 300);
+            }
+
+            if (term) {
+                term.dispose();
+                term = null;
+            }
+
+            document.getElementById('terminalView').classList.remove('show');
+            document.getElementById('sessionSelector').classList.remove('hide');
+
+            if (!refreshInterval) {
+                refreshInterval = setInterval(loadSessions, 5000);
+            }
+            loadSessions();
+        }
+
+        // 绑定快捷按钮
+        function bindShortcuts() {
+            var btns = document.querySelectorAll('.sc-btn[data-cmd]');
+            for (var i = 0; i < btns.length; i++) {
+                btns[i].onclick = function() {
+                    if (socket && socket.readyState === WebSocket.OPEN) {
+                        socket.send('0' + this.dataset.cmd + '\r');
+                    }
+                };
+            }
+
+            var toggle = document.getElementById('shortcutsToggle');
+            var shortcuts = document.getElementById('shortcuts');
+            toggle.onclick = function() {
+                shortcuts.classList.toggle('show');
+                this.classList.toggle('active');
+                this.textContent = shortcuts.classList.contains('show') ? '×' : '+';
+            };
+        }
+
+        // 显示帮助
+        window.showHelp = function() {
+            document.getElementById('helpPanel').classList.toggle('show');
+        };
+
+        // 复制文本
+        function copyText(text) {
+            var textarea = document.getElementById('clipboardTextarea');
+            textarea.value = text;
+            textarea.select();
+            try {
+                document.execCommand('copy');
+            } catch(e) {
+                if (navigator.clipboard) {
+                    navigator.clipboard.writeText(text).catch(function() {});
+                }
+            }
+        }
+
+        // 粘贴到终端
+        window.pasteToTerm = function() {
+            var existing = document.getElementById('pasteDialog');
+            if (existing) existing.remove();
+
+            var dialog = document.createElement('div');
+            dialog.id = 'pasteDialog';
+            dialog.innerHTML = '<div style="position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.7);z-index:1000;display:flex;align-items:center;justify-content:center;">' +
+                '<div style="background:#1a1a2e;padding:20px;border-radius:12px;max-width:400px;width:90%;">' +
+                '<h3 style="color:#fff;margin-bottom:12px;font-size:16px;">粘贴内容</h3>' +
+                '<textarea id="pasteInput" style="width:100%;height:120px;background:#0d0d0d;color:#fff;border:1px solid #3d3d5c;border-radius:8px;padding:10px;font-size:14px;resize:none;" placeholder="在此粘贴内容 (Ctrl+V)..."></textarea>' +
+                '<div style="margin-top:12px;display:flex;gap:10px;justify-content:flex-end;">' +
+                '<button id="pasteCancel" style="padding:8px 16px;background:#3d3d5c;color:#fff;border:none;border-radius:6px;cursor:pointer;">取消</button>' +
+                '<button id="pasteConfirm" style="padding:8px 16px;background:#e94560;color:#fff;border:none;border-radius:6px;cursor:pointer;">粘贴</button>' +
+                '</div></div></div>';
+
+            document.body.appendChild(dialog);
+
+            var input = document.getElementById('pasteInput');
+            var cancelBtn = document.getElementById('pasteCancel');
+            var confirmBtn = document.getElementById('pasteConfirm');
+
+            input.focus();
+
+            cancelBtn.onclick = function() {
+                dialog.remove();
+            };
+
+            confirmBtn.onclick = function() {
+                var text = input.value;
+                if (text && socket && socket.readyState === WebSocket.OPEN) {
+                    socket.send('0' + text);
+                    toast('已粘贴');
+                }
+                dialog.remove();
+            };
+
+            dialog.firstChild.onclick = function(e) {
+                if (e.target === this) dialog.remove();
+            };
+        };
+
+        // 从终端复制
+        window.copyFromTerm = function() {
+            if (term) {
+                var selection = term.getSelection();
+                if (selection) {
+                    copyText(selection);
+                    toast('已复制');
+                } else {
+                    toast('请先选择要复制的内容');
+                }
+            }
+        };
+
+        // 全屏切换
+        window.toggleFullscreen = function() {
+            if (document.fullscreenElement) {
+                document.exitFullscreen();
+            } else {
+                document.documentElement.requestFullscreen();
+            }
+        };
+
+        // Toast 提示
+        function toast(msg) {
+            var t = document.getElementById('toast');
+            t.textContent = msg;
+            t.classList.add('show');
+            setTimeout(function() { t.classList.remove('show'); }, 2000);
+        }
+
+        document.addEventListener('DOMContentLoaded', init);
+    })();
+    </script>
+</body>
+</html>
