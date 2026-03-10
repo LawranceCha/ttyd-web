@@ -239,7 +239,11 @@
         /* 终端界面 */
         .terminal-view {
             display: none;
-            height: 100vh;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
             flex-direction: column;
         }
 
@@ -260,6 +264,7 @@
             justify-content: space-between;
             border-bottom: 1px solid #1a1a2e;
             flex-shrink: 0;
+            height: 42px;
         }
 
         .window-controls {
@@ -313,6 +318,11 @@
             background: #0d0d0d;
             position: relative;
             min-height: 0;
+            overflow: hidden;
+        }
+
+        .terminal-wrapper > #terminal {
+            flex: 1;
         }
 
         #terminal {
@@ -322,19 +332,31 @@
             right: 0;
             bottom: 0;
             padding: 8px;
+            overflow: hidden;
         }
 
         #terminal .xterm {
             height: 100%;
             width: 100%;
+            padding: 0;
+            margin: 0;
         }
 
         #terminal .xterm-viewport {
+            width: 100% !important;
             height: 100% !important;
         }
 
         #terminal .xterm-screen {
-            height: 100% !important;
+            width: 100% !important;
+        }
+
+        #terminal .xterm-rows {
+            width: 100% !important;
+        }
+
+        #terminal .xterm-helpers {
+            display: none;
         }
 
         /* 移动端适配 */
@@ -819,14 +841,33 @@
             term.loadAddon(fitAddon);
             term.open(document.getElementById('terminal'));
 
+            // 强制设置 xterm 样式
+            var terminalEl = document.getElementById('terminal');
+            var xtermEl = terminalEl.querySelector('.xterm');
+            if (xtermEl) {
+                xtermEl.style.width = '100%';
+                xtermEl.style.height = '100%';
+            }
+
             // 确保 xterm 填满容器
             function doFit() {
-                try { fitAddon.fit(); } catch(e) {}
+                try {
+                    // 检查容器尺寸
+                    var rect = terminalEl.getBoundingClientRect();
+                    console.log('Terminal size:', rect.width, 'x', rect.height);
+                    if (rect.width > 0 && rect.height > 0) {
+                        fitAddon.fit();
+                    }
+                } catch(e) {
+                    console.log('fit error:', e);
+                }
             }
-            setTimeout(doFit, 50);
-            setTimeout(doFit, 200);
-            setTimeout(doFit, 500);
-            setTimeout(doFit, 1000);
+
+            // 多次调用确保生效
+            requestAnimationFrame(doFit);
+            setTimeout(doFit, 100);
+            setTimeout(doFit, 300);
+            setTimeout(doFit, 600);
 
             // 移动端屏幕旋转时重新适配
             if (window.innerWidth <= 768) {
