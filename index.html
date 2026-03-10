@@ -568,7 +568,6 @@
             <button class="shortcuts-toggle" id="shortcutsToggle">+</button>
             <div class="shortcuts" id="shortcuts">
                 <button class="sc-btn" onclick="pasteToTerm()">粘贴</button>
-                <button class="sc-btn" onclick="copyFromTerm()">复制</button>
                 <span style="color:#3d3d5c">|</span>
                 <button class="sc-btn" data-cmd="cd ~">~</button>
                 <button class="sc-btn" data-cmd="ls -la">ls</button>
@@ -583,10 +582,10 @@
     <div class="help-panel" id="helpPanel">
         <h3>复制粘贴</h3>
         <table>
-            <tr><td>Shift+拖动</td><td>选中文字</td></tr>
+            <tr><td>Shift+拖动</td><td>选中并复制</td></tr>
+            <tr><td>右键</td><td>粘贴剪贴板内容</td></tr>
             <tr><td>Ctrl+Shift+V</td><td>粘贴</td></tr>
             <tr><td>Shift+Insert</td><td>粘贴</td></tr>
-            <tr><td>Ctrl+Shift+C</td><td>复制</td></tr>
         </table>
         <h3 style="margin-top:12px">tmux 快捷键</h3>
         <table>
@@ -840,10 +839,47 @@
                 });
             }
 
-            // 右键粘贴
+            // 右键粘贴（直接粘贴剪贴板内容，不弹窗）
             term.element.addEventListener('contextmenu', function(e) {
                 e.preventDefault();
-                pasteToTerm();
+                // 尝试读取剪贴板
+                if (navigator.clipboard && navigator.clipboard.readText) {
+                    navigator.clipboard.readText().then(function(text) {
+                        if (text && socket && socket.readyState === WebSocket.OPEN) {
+                            socket.send('0' + text);
+                            toast('已粘贴');
+                        }
+                    }).catch(function() {
+                        toast('无法读取剪贴板');
+                    });
+                }
+            });
+
+            // Shift + 鼠标拖动选中复制
+            var isShiftSelecting = false;
+            var shiftStartX = 0;
+            var shiftStartY = 0;
+
+            term.element.addEventListener('mousedown', function(e) {
+                if (e.shiftKey) {
+                    isShiftSelecting = true;
+                    shiftStartX = e.offsetX;
+                    shiftStartY = e.offsetY;
+                }
+            });
+
+            term.element.addEventListener('mouseup', function(e) {
+                if (isShiftSelecting) {
+                    isShiftSelecting = false;
+                    // 延迟获取选中内容
+                    setTimeout(function() {
+                        var selection = term.getSelection();
+                        if (selection) {
+                            copyText(selection);
+                            toast('已复制 ' + selection.length + ' 字符');
+                        }
+                    }, 50);
+                }
             });
 
             term.onData(function(data) {
