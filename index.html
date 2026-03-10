@@ -566,6 +566,12 @@
             </div>
             <div id="terminal"></div>
             <button class="shortcuts-toggle" id="shortcutsToggle">+</button>
+            <!-- 暂停/复制按钮 -->
+            <div style="position:absolute;right:10px;bottom:80px;z-index:100;display:flex;gap:8px;">
+                <button class="term-action-btn" id="pauseBtn" style="padding:10px 15px;background:#3d3d5c;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:14px;box-shadow:0 2px 6px rgba(0,0,0,0.3);">⏸ 暂停</button>
+                <button class="term-action-btn" id="termPasteBtn" onclick="pasteToTerm()" style="padding:10px 15px;background:#e94560;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:14px;box-shadow:0 2px 6px rgba(0,0,0,0.3);">📋 粘贴</button>
+                
+            </div>
             <div class="shortcuts" id="shortcuts">
                 <button class="sc-btn" onclick="pasteToTerm()">粘贴</button>
                 <span style="color:#3d3d5c">|</span>
@@ -628,6 +634,8 @@
         var currentSession = null;
         var refreshInterval = null;
         var API_PORT = 7682;
+        var isPaused = false;  // 暂停标志
+        var pendingData = [];  // 暂停时缓存的数据
 
         // 初始化
         function init() {
@@ -794,6 +802,9 @@
                 cursorBlink: true,
                 scrollback: 10000,
                 allowProposedApi: true,
+                disableStdin: false,
+                // 启用 DOM 渲染以支持浏览器选择
+                rendererType: 'dom',
                 theme: {
                     background: '#0d0d0d',
                     foreground: '#eaeaea',
@@ -843,43 +854,7 @@
             term.element.addEventListener('contextmenu', function(e) {
                 e.preventDefault();
                 // 尝试读取剪贴板
-                if (navigator.clipboard && navigator.clipboard.readText) {
-                    navigator.clipboard.readText().then(function(text) {
-                        if (text && socket && socket.readyState === WebSocket.OPEN) {
-                            socket.send('0' + text);
-                            toast('已粘贴');
-                        }
-                    }).catch(function() {
-                        toast('无法读取剪贴板');
-                    });
-                }
-            });
-
-            // Shift + 鼠标拖动选中复制
-            var isShiftSelecting = false;
-            var shiftStartX = 0;
-            var shiftStartY = 0;
-
-            term.element.addEventListener('mousedown', function(e) {
-                if (e.shiftKey) {
-                    isShiftSelecting = true;
-                    shiftStartX = e.offsetX;
-                    shiftStartY = e.offsetY;
-                }
-            });
-
-            term.element.addEventListener('mouseup', function(e) {
-                if (isShiftSelecting) {
-                    isShiftSelecting = false;
-                    // 延迟获取选中内容
-                    setTimeout(function() {
-                        var selection = term.getSelection();
-                        if (selection) {
-                            copyText(selection);
-                            toast('已复制 ' + selection.length + ' 字符');
-                        }
-                    }, 50);
-                }
+               //pasteToTerm();
             });
 
             term.onData(function(data) {
@@ -893,6 +868,11 @@
                 if ((e.ctrlKey && e.shiftKey && e.key === 'V') || (e.shiftKey && e.key === 'Insert')) {
                     e.preventDefault();
                     pasteToTerm();
+                }
+                if (e.ctrlKey && e.key === 'C') {
+                	debugger
+                    e.preventDefault();
+                    toast('提示: 可以按住shift然后拖动来选择并复制文本.');
                 }
                 if (e.ctrlKey && e.shiftKey && e.key === 'C') {
                     e.preventDefault();
@@ -932,6 +912,11 @@
                 setTimeout(function() {
                     socket.send('0tmux attach -t ' + name + ' 2>/dev/null || tmux new -s ' + name + '\r');
                 }, 100);
+
+                // 禁用 tmux 鼠标模式，让浏览器可以正常选择文本
+//                setTimeout(function() {
+//                    socket.send('0tmux set -g mouse off\r');
+//                }, 500);
             };
 
             socket.onmessage = function(e) {
@@ -940,9 +925,15 @@
                     var cmd = String.fromCharCode(arr[0]);
                     var payload = arr.slice(1);
 
+                    // 如果暂停中，缓存数据
+                    if (isPaused) {
+                        pendingData.push({cmd: cmd, payload: payload});
+                        return;
+                    }
+
                     switch (cmd) {
                         case '0':
-                            term.write(payload);
+                            if (term) term.write(payload);
                             break;
                         case '1':
                             var title = new TextDecoder().decode(payload);
@@ -959,6 +950,79 @@
             socket.onerror = function() {
                 toast('连接错误');
             };
+
+            // 保存最近选择的文本
+            var lastSelectedText = '';
+
+            // 暂停按钮
+            var pauseBtn = document.getElementById('pauseBtn');
+            pauseBtn.onclick = function() {
+                isPaused = !isPaused;
+                if (isPaused) {
+                    pauseBtn.textContent = '▶ 继续';
+                    pauseBtn.style.background = '#28c840';
+                    document.getElementById('statusText').textContent = '已暂停 - 可以选择文本';
+                } else {
+                    pauseBtn.textContent = '⏸ 暂停';
+                    pauseBtn.style.background = '#3d3d5c';
+                    document.getElementById('statusText').textContent = '已连接';
+                    // 写入缓存的数据
+                    while (pendingData.length > 0 && term) {
+                        var item = pendingData.shift();
+                        switch (item.cmd) {
+                            case '0':
+                                term.write(item.payload);
+                                break;
+                            case '1':
+                                var title = new TextDecoder().decode(item.payload);
+                                document.getElementById('termTitle').textContent = title;
+                                break;
+                        }
+                    }
+                }
+            };
+
+            // 监听选择变化 - Shift 选择后自动复制
+            term.element.addEventListener('mouseup', function(e) {
+                // 只在按住 Shift 时自动复制
+                if (e.shiftKey) {
+                	copyFromTerm();
+//                    setTimeout(async function() {
+//                    	debugger
+//                        var browserSelection = term.getSelection();
+//                        var browserSelection = window.getSelection();
+//                        if (browserSelection && browserSelection.toString()) {
+//                            var text = browserSelection.toString();
+//                            var success = await copyText(text);
+//                            // var success = await copyFromTerm(text);
+//                            copyFromTerm();
+//                            if (success) {
+//                                toast('已复制 ' + text.length + ' 字符');
+//                            } else {
+//                                toast('复制失败');
+//                            }
+//                        }
+//                    }, 100);
+                }
+            });
+
+            // 复制按钮
+//            var termCopyBtn = document.getElementById('termCopyBtn');
+//            termCopyBtn.onclick = async function() {
+//            	copyFromTerm();
+//                var selection = lastSelectedText || window.getSelection().toString();
+//                if (selection) {
+//                    var success = await copyText(selection);
+//                    if (success) {
+//                        toast('已复制 ' + selection.length + ' 字符');
+//                        lastSelectedText = '';
+//                    } else {
+//                        toast('复制失败，请检查浏览器权限');
+//                    }
+//                } else {
+//                    toast('请先在终端中选择文本');
+//                }
+//            };
         }
 
         // 返回会话列表
@@ -1010,18 +1074,39 @@
             document.getElementById('helpPanel').classList.toggle('show');
         };
 
-        // 复制文本
-        function copyText(text) {
-            var textarea = document.getElementById('clipboardTextarea');
-            textarea.value = text;
-            textarea.select();
-            try {
-                document.execCommand('copy');
-            } catch(e) {
-                if (navigator.clipboard) {
-                    navigator.clipboard.writeText(text).catch(function() {});
+        // 复制文本 - 优先使用 Clipboard API
+        async function copyText(text) {
+            // 优先尝试现代 Clipboard API
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                try {
+                    await navigator.clipboard.writeText(text);
+                    return true;
+                } catch(e) {
+                    console.log('Clipboard API failed:', e);
                 }
             }
+            // 降级到 execCommand - 需要确保 textarea 可见且可选中
+            var textarea = document.getElementById('clipboardTextarea');
+            if (!textarea) {
+                console.error('clipboardTextarea not found');
+                return false;
+            }
+            // 临时显示 textarea 以便选中
+            textarea.value = text;
+            textarea.style.cssText = 'position:fixed;left:0;top:0;width:100%;height:100px;opacity:0.01;z-index:9999;';
+            document.body.appendChild(textarea);
+            textarea.focus();
+            textarea.select();
+            textarea.setSelectionRange(0, text.length);
+            var success = false;
+            try {
+                success = document.execCommand('copy');
+            } catch(e) {
+                console.log('execCommand failed:', e);
+            }
+            // 恢复隐藏
+            textarea.style.cssText = 'position:absolute;left:-9999px;top:-9999px;width:1px;height:1px;opacity:0;';
+            return success;
         }
 
         // 粘贴到终端
@@ -1067,12 +1152,16 @@
         };
 
         // 从终端复制
-        window.copyFromTerm = function() {
+        window.copyFromTerm = async function() {
             if (term) {
                 var selection = term.getSelection();
                 if (selection) {
-                    copyText(selection);
-                    toast('已复制');
+                    var success = await copyText(selection);
+                    if (success) {
+                        toast('已复制 ' + selection.length + ' 字符');
+                    } else {
+                        toast('复制失败');
+                    }
                 } else {
                     toast('请先选择要复制的内容');
                 }
