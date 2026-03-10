@@ -775,7 +775,10 @@
             document.getElementById('termTitle').textContent = name;
             document.getElementById('sessionInfo').textContent = name;
 
-            initTerminal(name);
+            // 等待视图渲染后再初始化终端
+            requestAnimationFrame(function() {
+                setTimeout(initTerminal, 50, name);
+            });
         }
 
         // 初始化终端
@@ -877,7 +880,17 @@
 
             socket.onopen = function() {
                 document.getElementById('statusText').textContent = '已连接';
+
+                // 先 fit 再发送尺寸
+                try { fitAddon.fit(); } catch(e) {}
                 socket.send(JSON.stringify({ columns: term.cols, rows: term.rows }));
+
+                // 延迟再次 fit 确保正确
+                setTimeout(function() {
+                    try { fitAddon.fit(); } catch(e) {}
+                    // 发送 resize
+                    socket.send(JSON.stringify({ columns: term.cols, rows: term.rows }));
+                }, 200);
 
                 setTimeout(function() {
                     socket.send('0tmux attach -t ' + name + ' 2>/dev/null || tmux new -s ' + name + '\r');
