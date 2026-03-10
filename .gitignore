@@ -21,3 +21,6 @@ Thumbs.db
 # 临时文件
 *.tmp
 *.temp
+
+# 规划文件
+.planning/
