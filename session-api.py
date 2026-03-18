@@ -4,7 +4,7 @@
 import subprocess
 import json
 from http.server import HTTPServer, BaseHTTPRequestHandler
-from urllib.parse import urlparse
+from urllib.parse import urlparse, unquote
 import os
 
 STATIC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'static')
@@ -12,6 +12,14 @@ STATIC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'static')
 class SessionAPI(BaseHTTPRequestHandler):
     def log_message(self, format, *args):
         pass  # 静默日志
+
+    def do_OPTIONS(self):
+        """处理 CORS 预检请求"""
+        self.send_response(200)
+        self.send_header('Access-Control-Allow-Origin', '*')
+        self.send_header('Access-Control-Allow-Methods', 'GET, DELETE, OPTIONS')
+        self.send_header('Access-Control-Allow-Headers', 'Content-Type')
+        self.end_headers()
 
     def do_GET(self):
         path = urlparse(self.path).path
@@ -56,7 +64,7 @@ class SessionAPI(BaseHTTPRequestHandler):
     def do_DELETE(self):
         path = urlparse(self.path).path
         if path.startswith('/session/'):
-            name = path[9:]  # 去掉 '/session/'
+            name = unquote(path[9:])  # URL 解码会话名称
             self.delete_session(name)
         else:
             self.send_error(404)

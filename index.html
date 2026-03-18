@@ -566,11 +566,15 @@
             </div>
             <div id="terminal"></div>
             <button class="shortcuts-toggle" id="shortcutsToggle">+</button>
-            <!-- 暂停/复制按钮 -->
+            <!-- 暂停/粘贴按钮 -->
             <div style="position:absolute;right:10px;bottom:80px;z-index:100;display:flex;gap:8px;">
                 <button class="term-action-btn" id="pauseBtn" style="padding:10px 15px;background:#3d3d5c;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:14px;box-shadow:0 2px 6px rgba(0,0,0,0.3);">⏸ 暂停</button>
-                <button class="term-action-btn" id="termPasteBtn" onclick="pasteToTerm()" style="padding:10px 15px;background:#e94560;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:14px;box-shadow:0 2px 6px rgba(0,0,0,0.3);">📋 粘贴</button>
-                
+                <button class="term-action-btn" onclick="pasteToTerm()" style="padding:10px 15px;background:#e94560;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:14px;box-shadow:0 2px 6px rgba(0,0,0,0.3);">📋 粘贴</button>
+            </div>
+            <!-- 滚动按钮 (移动端显示) -->
+            <div id="scrollBtns" style="position:absolute;right:10px;bottom:140px;z-index:100;display:none;flex-direction:column;gap:5px;">
+                <button id="scrollUpBtn" style="width:44px;height:44px;background:rgba(61,61,92,0.9);color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:18px;box-shadow:0 2px 6px rgba(0,0,0,0.3);">▲</button>
+                <button id="scrollDownBtn" style="width:44px;height:44px;background:rgba(61,61,92,0.9);color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:18px;box-shadow:0 2px 6px rgba(0,0,0,0.3);">▼</button>
             </div>
             <div class="shortcuts" id="shortcuts">
                 <button class="sc-btn" onclick="pasteToTerm()">粘贴</button>
@@ -883,6 +887,43 @@
             window.addEventListener('resize', function() {
                 if (fitAddon && term) {
                     try { fitAddon.fit(); } catch(e) {}
+                }
+            });
+
+            // 移动端滚动按钮
+            var scrollBtns = document.getElementById('scrollBtns');
+            var scrollUpBtn = document.getElementById('scrollUpBtn');
+            var scrollDownBtn = document.getElementById('scrollDownBtn');
+
+            // 检测移动端
+            if (window.innerWidth <= 768 || 'ontouchstart' in window) {
+                scrollBtns.style.display = 'flex';
+            }
+
+            // 向上滚动 - 发送 tmux 滚动命令
+            scrollUpBtn.addEventListener('touchstart', function(e) {
+                e.preventDefault();
+                if (socket && socket.readyState === WebSocket.OPEN) {
+                    // 发送 Ctrl+B [ 进入复制模式，然后发送 Page Up
+                    socket.send('0\x02[');
+                    setTimeout(function() {
+                        socket.send('0\x1b[5~'); // Page Up
+                    }, 50);
+                }
+            });
+
+            // 向下滚动
+            scrollDownBtn.addEventListener('touchstart', function(e) {
+                e.preventDefault();
+                if (socket && socket.readyState === WebSocket.OPEN) {
+                    socket.send('0\x1b[6~'); // Page Down
+                }
+            });
+
+            // 点击退出复制模式
+            scrollBtns.addEventListener('click', function() {
+                if (socket && socket.readyState === WebSocket.OPEN) {
+                    socket.send('0q'); // q 退出复制模式
                 }
             });
 
